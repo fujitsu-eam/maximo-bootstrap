@@ -1,7 +1,7 @@
 - name: Network Getting Started First Playbook
   hosts: localhost
   vars:
-    rosa_cluster_name: "{{ lookup('env', 'CEL_ROSA_CLUSTER_NAME') }}"
+    rosa_cluster_name: "{{ lookup('env', 'FUJ_ROSA_CLUSTER_NAME') }}"
   connection: local
   gather_facts: false
   tasks:
