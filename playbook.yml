@@ -1,0 +1,13 @@
+- name: Network Getting Started First Playbook
+  hosts: localhost
+  vars:
+    rosa_cluster_name: "{{ lookup('env', 'CEL_ROSA_CLUSTER_NAME') }}"
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Check for ROSA installer completion
+      ansible.builtin.shell: /usr/local/bin/rosa describe cluster -c {{ rosa_cluster_name }} | grep ^State:|awk '{print $2}'
+      register: _r_rosa_installer_status
+      until: _r_rosa_installer_status.stdout.find("ready") != -1
+      retries: 60
+      delay: 60
