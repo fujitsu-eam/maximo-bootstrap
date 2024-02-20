@@ -24,7 +24,7 @@
     
     - name: Set ROSA cluster information as a fact
       ansible.builtin.set_fact:
-      rosa_info: "{{ _r_rosa_info.stdout | from_json }}"
+        rosa_info: "{{ _r_rosa_info.stdout | from_json }}"
 
     - name: Show oc login command
       ansible.builtin.debug:
