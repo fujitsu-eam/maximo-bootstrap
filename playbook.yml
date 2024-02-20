@@ -1,7 +1,9 @@
-- name: Network Getting Started First Playbook
+- name: Wait for ROSA to be ready and install MAS
   hosts: localhost
   vars:
     rosa_cluster_name: "{{ lookup('env', 'FUJ_ROSA_CLUSTER_NAME') }}"
+    mas_bucket_name: "{{ lookup('env', 'FUJ_MAS_BUCKET_NAME') }}"
+    entitlement_secret: "{{ lookup('env', 'FUJ_MAS_ENT_SECRET') }}"
   connection: local
   gather_facts: false
   tasks:
@@ -11,3 +13,35 @@
       until: _r_rosa_installer_status.stdout.find("ready") != -1
       retries: 60
       delay: 60
+
+    - name: Create ROSA cluster-admin user
+      ansible.builtin.shell: /usr/local/bin/rosa create admin --cluster={{ rosa_cluster_name }} |grep 'oc login' | awk '{print $7}'
+      register: _r_rosa_admin_create_result
+
+    - name: Get ROSA Information
+      ansible.builtin.shell: /usr/local/bin/rosa describe cluster -c {{ rosa_cluster_name }} -o json
+      register: _r_rosa_info
+    
+    - name: Set ROSA cluster information as a fact
+      ansible.builtin.set_fact:
+      rosa_info: "{{ _r_rosa_info.stdout | from_json }}"
+
+    - name: Show oc login command
+      ansible.builtin.debug:
+        msg: oc login {{ rosa_info.api.url }} --username cluster-admin --password {{ _r_rosa_admin_create_result.stdout }}
+
+    #- name: Log in to OpenShift
+    #  ansible.builtin.shell: oc login {{ rosa_info.api.url }} --username cluster-admin --password {{ _r_rosa_admin_create_result.stdout }}
+
+    - name: Authenticate with Kubernetes with cluster-admin user
+      community.okd.openshift_auth:
+        host: "{{ rosa_info.api.url }}"
+        username: "cluster-admin"
+        password: "{{ _r_rosa_admin_create_result.stdout }}"
+      until: openshift_auth_results.failed == false
+      register: openshift_auth_results
+      retries: 10
+      delay: 60
+
+    - name: Deploy MAS Core
+      ansible.builtin.shell: /root/ibm-mas-on-aws/scripts/deploy_mascore.sh {{ mas_bucket_name }} {{ rosa_cluster_name }} {{ entitlement_secret }}
