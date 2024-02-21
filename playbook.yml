@@ -38,6 +38,7 @@
         host: "{{ rosa_info.api.url }}"
         username: "cluster-admin"
         password: "{{ _r_rosa_admin_create_result.stdout }}"
+        validate_certs: false
       until: openshift_auth_results.failed == false
       register: openshift_auth_results
       retries: 10
