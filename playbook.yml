@@ -44,5 +44,5 @@
     - name: Log in to OpenShift
       ansible.builtin.shell: oc login {{ rosa_info.api.url }} --username cluster-admin --password {{ _r_rosa_admin_create_result.stdout }}
 
-    - name: Deploy MAS Core
-      ansible.builtin.shell: /root/ibm-mas-on-aws/scripts/deploy_mascore.sh {{ mas_bucket_name }} {{ rosa_cluster_name }} {{ entitlement_secret }}
+    #- name: Deploy MAS Core
+    #  ansible.builtin.shell: /root/ibm-mas-on-aws/scripts/deploy_mascore.sh {{ mas_bucket_name }} {{ rosa_cluster_name }} {{ entitlement_secret }}
