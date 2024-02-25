@@ -44,6 +44,9 @@
     - name: Log in to OpenShift
       ansible.builtin.shell: oc login {{ rosa_info.api.url }} --username cluster-admin --password {{ _r_rosa_admin_create_result.stdout }} --insecure-skip-tls-verify
 
+    - name: Save OpenShift Details as Secret
+      ansible.builtin.shell: aws secretsmanager create-secret --name {{ rosa_cluster_name }}-ocp-creds --description "ROSA Login Details" --secret-string '{"user":"cluster-admin","password":"{{  _r_rosa_admin_create_result.stdout }}"}'
+
     - name: Deploy MAS Core
       ansible.builtin.shell: /root/ibm-mas-on-aws/scripts/deploy_mascore.sh {{ mas_bucket_name }} {{ rosa_cluster_name }} {{ entitlement_secret }}
       register: _r_mas_install_output
