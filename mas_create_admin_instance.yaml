@@ -1,0 +1,274 @@
+Parameters:
+  #KeyName:
+  #  Type: String
+  #  Description: ARN of the Key Pair created in Parameter store
+  InstanceType:
+    Description: Seed EC2 instance type
+    Type: String
+    Default: t2.large
+    ConstraintDescription: must be a valid EC2 instance type.
+  LatestSeedAmiId:
+    Type:  'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64'
+  Subnet0Id:
+    Type: String
+    Description: Private SubnetId 0
+    Default: 
+  Subnet1Id:
+    Type: String
+    Description: Private SubnetId 1
+    Default: 
+  Subnet2Id:
+    Type: String
+    Description: Private SubnetId 2
+    Default: 
+  VpcId:
+    Type: String
+    Description: VPC Id for the Existing VPC
+    Default: 
+  OCPClusterName:
+    Type: String
+    Description: Name of the OCP Cluster
+    Default: masocprosadev
+  OCPClusterVersion:
+    Type: String
+    Description: Version of the OCP Cluster
+    Default: 4.12.49
+  ROSAToken:
+    Type: String
+    Description: Token code for Red Hat login
+  MASBucketName:
+    Type: String
+    Description: MAS S3 Bucket Name
+    Default: 
+  EntSecretARN:
+    Type: String
+    Description: IBM Entitlement Key Secret ARN
+    Default: 
+  RDSSecretARN:
+    Type: String
+    Description: RDS Admin User Secret
+    Default: 
+  RDSEndpointURL:
+    Type: String
+    Description: RDS Endpoint URL
+    Default: 
+  RDSSecurityGroupID:
+    Type: String
+    Description: RDS Security Group ID
+    Default: 
+  WorkspaceName:
+    Type: String
+    Description: Name of Maximo Workspace
+    Default: dev
+  MasInstanceID:
+    Type: String
+    Description: MAS Instance Identifier
+    Default: masinst1
+  MaximoDBName:
+    Type: String
+    Description: Maximo Database Name
+    Default: maxdb80
+  MaximoDBPassword:
+    Type: String
+    NoEcho: true
+    Description: Maximo Database User Password
+
+
+Resources:
+  ##SSH Key Pair
+  MASOCPKeyPair:
+    Type: 'AWS::EC2::KeyPair'
+    Properties:
+      KeyName: 'ec2-ase2-maximo-admin-k02'
+  
+  # Seed Instance Role used by the instance Profile
+  SeedInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - !Sub 'arn:${AWS::Partition}:iam::aws:policy/AdministratorAccess'
+        Path: "/"
+
+  # Instance Profile associated with the Seed EC2 instance
+  SeedInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: 
+      Path: "/"
+      Roles: 
+        - !Ref SeedInstanceRole
+# Seed Instance
+  SeedEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref 'InstanceType'
+      SecurityGroupIds: [!GetAtt SeedSecurityGroup.GroupId]
+      KeyName: !Ref MASOCPKeyPair
+      ImageId: !Ref 'LatestSeedAmiId'
+      IamInstanceProfile: !Ref 'SeedInstanceProfile'
+      SubnetId: !Ref Subnet0Id
+      BlockDeviceMappings:
+      - DeviceName: "/dev/xvda"
+        Ebs:
+          Encrypted: 'true'
+          VolumeSize: '20'
+          VolumeType: gp3
+      ##TO DO: Export EC2 IAM role for AWS_PROFILE env variable
+      UserData: 
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          ## Install jq
+          yum install -y jq 
+          ## Install SSM Agent
+          cd /tmp
+          sudo yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
+          sudo systemctl enable amazon-ssm-agent
+          sudo systemctl start amazon-ssm-agent       
+          
+          #Install git
+          sudo yum install -y git
+
+          ## Install ansible
+          wget https://bootstrap.pypa.io/get-pip.py
+          python3 get-pip.py
+          python3 -m pip install ansible junit_xml pymongo xmljson jmespath requests kubernetes==12.0.1 openshift==0.12.1
+          # Install ansible collection
+          ansible-galaxy collection install ibm.mas_devops
+          # Create Working folder and the MAS config folder
+          mkdir -p ~/install-dir/masconfig
+          ## Download openshift client and command line installer
+          wget -q https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/${OCPClusterVersion}/openshift-client-linux.tar.gz -P /root/install-dir/
+          tar -zxf /root/install-dir/openshift-client-linux.tar.gz -C /root/install-dir/
+          sudo mv /root/install-dir/oc /root/install-dir/kubectl /usr/local/bin/
+          oc version
+          # Download the openshift install program
+          wget -q https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/${OCPClusterVersion}/openshift-install-linux.tar.gz -P /root/install-dir/
+          tar -zxf /root/install-dir/openshift-install-linux.tar.gz -C /root/install-dir/
+
+          # Download the rosa CLI
+          wget https://mirror.openshift.com/pub/openshift-v4/clients/rosa/latest/rosa-linux.tar.gz -O ~/install-dir/rosa-linux.tar.gz
+          mkdir -p ~/install-dir/rosa-install
+          tar xvf ~/install-dir/rosa-linux.tar.gz -C ~/install-dir/rosa-install
+          sudo mv ~/install-dir/rosa-install/rosa /usr/local/bin/
+          
+          #Download the ccoctl cli
+          wget https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/${OCPClusterVersion}/ccoctl-linux-${OCPClusterVersion}.tar.gz -O ~/install-dir/ccoctl-linux-${OCPClusterVersion}.tar.gz
+          tar xvf ~/install-dir/ccoctl-linux-${OCPClusterVersion}.tar.gz -C ~/install-dir/
+          sudo mv ~/install-dir/ccoctl /usr/local/bin/
+
+          # Clone the ibm-mas-on-aws github repo
+          git clone https://github.com/aws-samples/ibm-mas-on-aws /root/ibm-mas-on-aws
+
+          #Replace workspace ID
+          sed -i 's/MAS_WORKSPACE_ID=masdev/MAS_WORKSPACE_ID=${WorkspaceName}/g' /root/ibm-mas-on-aws/scripts/deploy_mascore.sh
+          sed -i 's/MAS_INSTANCE_ID=masinst1/MAS_INSTANCE_ID=${MasInstanceID}/g' /root/ibm-mas-on-aws/scripts/deploy_mascore.sh
+
+          # Install yq
+          pip3 install yq
+
+          export HOME=/root
+          export AWS_DEFAULT_REGION=${AWS::Region}
+
+          #Install client for SQL Server
+          curl https://packages.microsoft.com/config/rhel/9/prod.repo | sudo tee /etc/yum.repos.d/mssql-release.repo
+          ACCEPT_EULA=Y yum install -y mssql-tools18 unixODBC-devel
+          Set up ODBC driver
+          echo "[AWSSQL]" >> /etc/odbc.ini
+          echo "Driver=ODBC Driver 18 for SQL Server" >> /etc/odbc.ini
+          echo "Server=${RDSEndpointURL}" >> /etc/odbc.ini
+          echo "TrustServerCertificate=yes" >> /etc/odbc.ini
+          #Create Maximo DB Script
+          export RDSUSER=`aws secretsmanager get-secret-value --secret-id ${RDSSecretARN} | jq --raw-output .SecretString | jq -r ."username"`
+          export RDSPASS=`aws secretsmanager get-secret-value --secret-id ${RDSSecretARN} | jq --raw-output .SecretString | jq -r ."password"`
+          echo "CREATE DATABASE ${MaximoDBName};" >> maximo.sql
+          echo "CREATE LOGIN maximo WITH PASSWORD = '${MaximoDBPassword}';" >> maximo.sql
+          echo "ALTER DATABASE ${MaximoDBName} MODIFY FILE (NAME = ${MaximoDBName}, SIZE = 500MB, FILEGROWTH = 10MB);" >> maximo.sql
+          echo "use ${MaximoDBName};" >> maximo.sql
+          echo "CREATE USER [maximo] FOR LOGIN [maximo];" >> maximo.sql
+          echo "ALTER ROLE [db_owner] ADD MEMBER [maximo];" >> maximo.sql
+          isql -v AWSSQL $RDSUSER $RDSPASS < maximo.sql
+          #Create secret for Maximo DB user and password
+          aws secretsmanager create-secret --name ${OCPClusterName}-managedb-creds --description "Manage Database Credentials" --secret-string '{"user":"maximo","password":"${MaximoDBPassword}"}'
+
+
+          echo "Logging in to ROSA"
+          echo "rosa login --token=${ROSAToken}"
+          rosa login --token=${ROSAToken}
+          echo "Installing ROSA"
+          echo "rosa create account-roles --region ${AWS::Region} --mode auto --yes && rosa create cluster --cluster-name ${OCPClusterName} --sts --operator-roles-prefix iam-maximo-rosa --multi-az --region ${AWS::Region} --version ${OCPClusterVersion} --enable-autoscaling --min-replicas 3 --max-replicas 3 --compute-machine-type m6a.4xlarge --machine-cidr 10.0.0.0/16 --service-cidr 172.30.0.0/16 --pod-cidr 10.128.0.0/14 --host-prefix 23 --subnet-ids ${Subnet0Id},${Subnet1Id},${Subnet2Id} --mode auto --yes --private"
+          rosa create account-roles --region ${AWS::Region} --mode auto --yes && rosa create cluster --cluster-name ${OCPClusterName} --sts --operator-roles-prefix iam-maximo-rosa --multi-az --region ${AWS::Region} --version ${OCPClusterVersion} --enable-autoscaling --min-replicas 3 --max-replicas 3 --compute-machine-type m6a.4xlarge --machine-cidr 10.0.0.0/16 --service-cidr 172.30.0.0/16 --pod-cidr 10.128.0.0/14 --host-prefix 23 --subnet-ids ${Subnet0Id},${Subnet1Id},${Subnet2Id} --mode auto --yes --private
+          export FUJ_ROSA_CLUSTER_NAME=${OCPClusterName}
+          export FUJ_MAS_BUCKET_NAME=${MASBucketName}
+          export FUJ_MAS_ENT_SECRET=${EntSecretARN}
+          git clone https://github.com/fujitsu-eam/maximo-bootstrap.git
+          cd maximo-bootstrap
+          ansible-playbook maximo-bootstrap.yml
+
+          #Deploy Maximo Manage
+          export MAS_CONFIG_DIR=~/install-dir/masconfig
+          export MAS_INSTANCE_ID=${MasInstanceID}
+          export MAS_WORKSPACE_ID=${WorkspaceName}
+          export IBM_ENTITLEMENT_KEY=`aws secretsmanager get-secret-value --secret-id $FUJ_MAS_ENT_SECRET --region $AWS_DEFAULT_REGION | jq -r ."SecretString"`
+          export CONFIGURE_EXTERNAL_DB=true
+          export DB_INSTANCE_ID=${MaximoDBName}
+          export MAS_JDBC_USER=maximo
+          export MAS_JDBC_PASSWORD=${MaximoDBPassword}
+          export MAS_JDBC_CERT_LOCAL_FILE="/root/install-dir/$AWS_DEFAULT_REGION-bundle.pem"
+          export MAS_JDBC_URL="jdbc:sqlserver://${RDSEndpointURL}:1433;databaseName=${MaximoDBName};encrypt=true"
+          export MAS_APP_SETTINGS_DB2_SCHEMA=dbo
+          export MAS_APP_SETTINGS_TABLESPACE=PRIMARY
+          export MAS_APP_SETTINGS_INDEXSPACE=PRIMARY
+          ansible-playbook ibm.mas_devops.oneclick_add_manage
+
+          #Configure Default TLS
+          /root/ibm-mas-on-aws/scripts/configure_default_tls.sh
+
+          # Signal the status from cfn-init
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource SeedEC2Instance --region ${AWS::Region}
+      Tags: 
+        - Key: 'Name'
+          Value: 'ec2-ase2-maximo-admin-n01'
+    CreationPolicy:
+        ResourceSignal:
+          Count: 1
+          Timeout: "PT240M"
+          # Seed Instance Security group. Allow SSH from anywhere
+  SeedSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: 'ec2-ase2-maximo-admin-g01'
+      GroupDescription: Allow Egress Traffic
+      SecurityGroupEgress:
+      - Description: "Allow traffic to Internet on Port 80"
+        IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - Description: "Allow traffic to Internet on Port 443"
+        IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+      - Description: "Allow traffic to Internet on Port 6443"
+        IpProtocol: tcp
+        FromPort: 6443
+        ToPort: 6443
+        CidrIp: 0.0.0.0/0      
+      - Description: "Allow traffic to Internet on Port 22"
+        IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+      - Description: "Allow connectivity to SQL Server on RDS"
+        IpProtocol: tcp
+        FromPort: 1433
+        ToPort: 1433
+        DestinationSecurityGroupId: !Ref 'RDSSecurityGroupID'
+      VpcId: !Ref VpcId
