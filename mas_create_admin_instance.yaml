@@ -25,6 +25,26 @@ Parameters:
   VpcId:
     Type: String
     Description: VPC Id for the Existing VPC
+    Default:
+  MachineCIDR:
+    Type: String
+    Description: Machine CIDR Range
+    Default:
+  ServiceCIDR:
+    Type: String
+    Description: Service CIDR Range
+    Default:
+  PODCIDR:
+    Type: String
+    Description: POD CIDR Range
+    Default:
+  HostPrefix:
+    Type: String
+    Description: Host prefix
+    Default:
+  ICEndpointSecurityGroup:
+    Type: String
+    Description: Security group ID of the Source EC2 Instance Connect Endpoint
     Default: 
   OCPClusterName:
     Type: String
@@ -202,8 +222,8 @@ Resources:
           echo "rosa login --token=${ROSAToken}"
           rosa login --token=${ROSAToken}
           echo "Installing ROSA"
-          echo "rosa create account-roles --region ${AWS::Region} --mode auto --yes && rosa create cluster --cluster-name ${OCPClusterName} --sts --operator-roles-prefix iam-maximo-rosa --multi-az --region ${AWS::Region} --version ${OCPClusterVersion} --enable-autoscaling --min-replicas 3 --max-replicas 3 --compute-machine-type m6a.4xlarge --machine-cidr 10.0.0.0/16 --service-cidr 172.30.0.0/16 --pod-cidr 10.128.0.0/14 --host-prefix 23 --subnet-ids ${Subnet0Id},${Subnet1Id},${Subnet2Id} --mode auto --yes --private"
-          rosa create account-roles --region ${AWS::Region} --mode auto --yes && rosa create cluster --cluster-name ${OCPClusterName} --sts --operator-roles-prefix iam-maximo-rosa --multi-az --region ${AWS::Region} --version ${OCPClusterVersion} --enable-autoscaling --min-replicas 3 --max-replicas 3 --compute-machine-type m6a.4xlarge --machine-cidr 10.0.0.0/16 --service-cidr 172.30.0.0/16 --pod-cidr 10.128.0.0/14 --host-prefix 23 --subnet-ids ${Subnet0Id},${Subnet1Id},${Subnet2Id} --mode auto --yes --private
+          echo "rosa create account-roles --region ${AWS::Region} --mode auto --yes && rosa create cluster --cluster-name ${OCPClusterName} --sts --operator-roles-prefix iam-maximo-rosa --multi-az --region ${AWS::Region} --version ${OCPClusterVersion} --enable-autoscaling --min-replicas 3 --max-replicas 3 --compute-machine-type m6a.4xlarge --machine-cidr ${MachineCIDR} --service-cidr ${ServiceCIDR} --pod-cidr ${PODCIDR} --host-prefix ${HostPrefix} --subnet-ids ${Subnet0Id},${Subnet1Id},${Subnet2Id} --mode auto --yes --private"
+          rosa create account-roles --region ${AWS::Region} --mode auto --yes && rosa create cluster --cluster-name ${OCPClusterName} --sts --operator-roles-prefix iam-maximo-rosa --multi-az --region ${AWS::Region} --version ${OCPClusterVersion} --enable-autoscaling --min-replicas 3 --max-replicas 3 --compute-machine-type m6a.4xlarge --machine-cidr ${MachineCIDR} --service-cidr ${ServiceCIDR} --pod-cidr ${PODCIDR} --host-prefix ${HostPrefix} --subnet-ids ${Subnet0Id},${Subnet1Id},${Subnet2Id} --mode auto --yes --private
           export FUJ_ROSA_CLUSTER_NAME=${OCPClusterName}
           export FUJ_MAS_BUCKET_NAME=${MASBucketName}
           export FUJ_MAS_ENT_SECRET=${EntSecretARN}
@@ -271,4 +291,10 @@ Resources:
         FromPort: 1433
         ToPort: 1433
         DestinationSecurityGroupId: !Ref 'RDSSecurityGroupID'
+      SecurityGroupIngress:
+      - Description: "Allow SSH traffic from VPC Endpoint"
+        IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        SourceSecurityGroupId: !Ref 'ICEndpointSecurityGroup'
       VpcId: !Ref VpcId
