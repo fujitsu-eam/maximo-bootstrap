@@ -54,7 +54,7 @@
       ansible.builtin.shell: aws secretsmanager create-secret --name {{ rosa_cluster_name }}-ocp-creds --description "ROSA Login Details" --secret-string '{"user":"cluster-admin","password":"{{  _r_rosa_admin_create_result.stdout }}"}'
 
     - name: Create Custom Domain
-      ansible.builtin.shell: ./customdomain.sh {{ mas_domain_name }} {{ cert_subject }}
+      ansible.builtin.shell: ./scripts/customdomain.sh {{ mas_domain_name }} {{ cert_subject }}
 
     - name: Deploy MAS Core
       ansible.builtin.shell: /root/ibm-mas-on-aws/scripts/deploy_mascore.sh {{ mas_bucket_name }} {{ rosa_cluster_name }} {{ entitlement_secret }}
