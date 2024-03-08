@@ -6,6 +6,7 @@
     entitlement_secret: "{{ lookup('env', 'FUJ_MAS_ENT_SECRET') }}"
     mas_domain_name: "{{ lookup('env', 'FUJ_MAS_DOMAIN') }}"
     cert_subject: "{{ lookup('env', 'FUJ_CERT_SUBJECT') }}"
+    mas_instance_name: "{{ lookup('env', 'FUJ_MASINSTANCE_ID') }}"
   connection: local
   gather_facts: false
   tasks:
