@@ -4,6 +4,8 @@
     rosa_cluster_name: "{{ lookup('env', 'FUJ_ROSA_CLUSTER_NAME') }}"
     mas_bucket_name: "{{ lookup('env', 'FUJ_MAS_BUCKET_NAME') }}"
     entitlement_secret: "{{ lookup('env', 'FUJ_MAS_ENT_SECRET') }}"
+    mas_domain_name: "{{ lookup('env', 'FUJ_MAS_DOMAIN') }}"
+    cert_subject: "{{ lookup('env', 'FUJ_CERT_SUBJECT') }}"
   connection: local
   gather_facts: false
   tasks:
@@ -51,6 +53,9 @@
     - name: Save OpenShift Details as Secret
       ansible.builtin.shell: aws secretsmanager create-secret --name {{ rosa_cluster_name }}-ocp-creds --description "ROSA Login Details" --secret-string '{"user":"cluster-admin","password":"{{  _r_rosa_admin_create_result.stdout }}"}'
 
+    - name: Create Custom Domain
+      ansible.builtin.shell: ./customdomain.sh {{ mas_domain_name }} {{ cert_subject }}
+
     - name: Deploy MAS Core
       ansible.builtin.shell: /root/ibm-mas-on-aws/scripts/deploy_mascore.sh {{ mas_bucket_name }} {{ rosa_cluster_name }} {{ entitlement_secret }}
       register: _r_mas_install_output
@@ -72,3 +77,9 @@
     - name: print3
       ansible.builtin.debug:
         msg: "{{ mas_admin_pass }}"
+    
+    - name: Label the MAS worskpace for Custom Ingress
+      ansible.builtin.shell: oc label ns mas-{{ mas_instance_name }}-core ingress=maximo
+    
+    - name: Label the Manage worskpace for Custom Ingress
+      ansible.builtin.shell: oc label ns mas-{{ mas_instance_name }}-manage ingress=maximo
