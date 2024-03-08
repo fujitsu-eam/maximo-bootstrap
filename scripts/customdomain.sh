@@ -14,6 +14,8 @@ openssl req \
   -addext "subjectAltName = DNS:*.home.$DOMAIN_NAME, DNS:*.manage.$DOMAIN_NAME"
   
 oc new-project maximo-ingress
+
+sleep 60
  
 oc create secret tls maximo-tls --cert=/var/tmp/maximo.crt --key=/var/tmp/maximo.key -n  maximo-ingress
  
