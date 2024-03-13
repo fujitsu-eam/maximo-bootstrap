@@ -93,7 +93,14 @@ Parameters:
     Type: String
     NoEcho: true
     Description: Maximo Database User Password
-
+  MaximoCertSubject:
+    Type: String
+    Description: Maximo Certificate Subject
+    Default: 
+  MaximoDomainName:
+    Type: String
+    Description: Maximo Domain Name
+    Default: 
 
 Resources:
   ##SSH Key Pair
@@ -189,6 +196,8 @@ Resources:
           #Replace workspace ID
           sed -i 's/MAS_WORKSPACE_ID=masdev/MAS_WORKSPACE_ID=${WorkspaceName}/g' /root/ibm-mas-on-aws/scripts/deploy_mascore.sh
           sed -i 's/MAS_INSTANCE_ID=masinst1/MAS_INSTANCE_ID=${MasInstanceID}/g' /root/ibm-mas-on-aws/scripts/deploy_mascore.sh
+          #Inject domain environment variable into script
+          sed -i '/^export MAS_WORKSPACE_ID=.*$/a export MAS_DOMAIN="${MaximoDomainName}"' /root/ibm-mas-on-aws/scripts/deploy_mascore.sh
 
           # Install yq
           pip3 install yq
@@ -227,6 +236,9 @@ Resources:
           export FUJ_ROSA_CLUSTER_NAME=${OCPClusterName}
           export FUJ_MAS_BUCKET_NAME=${MASBucketName}
           export FUJ_MAS_ENT_SECRET=${EntSecretARN}
+          export FUJ_MAS_DOMAIN=${MaximoDomainName}
+          export FUJ_CERT_SUBJECT="${MaximoCertSubject}"
+          export FUJ_MASINSTANCE_ID=${MasInstanceID}
           git clone https://github.com/fujitsu-eam/maximo-bootstrap.git
           cd maximo-bootstrap
           ansible-playbook maximo-bootstrap.yml
@@ -246,6 +258,12 @@ Resources:
           export MAS_APP_SETTINGS_TABLESPACE=PRIMARY
           export MAS_APP_SETTINGS_INDEXSPACE=PRIMARY
           ansible-playbook ibm.mas_devops.oneclick_add_manage
+
+          #Patch Maximo to use custom domain
+          #oc patch suite ${MasInstanceID} -n mas-${MasInstanceID}-core --type='json' -p='[{"op": "replace", "path": "/spec/domain", "value":"${MaximoDomainName}"}]'
+
+          #Label the Manage Workspace to use Custom Ingress
+          oc label ns mas-${MasInstanceID}-manage ingress=maximo
 
           #Configure Default TLS
           /root/ibm-mas-on-aws/scripts/configure_default_tls.sh
