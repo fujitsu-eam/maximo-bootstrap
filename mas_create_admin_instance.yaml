@@ -102,6 +102,7 @@ Parameters:
     Description: Maximo Domain Name
     Default: 
 
+
 Resources:
   ##SSH Key Pair
   MASOCPKeyPair:
@@ -131,10 +132,22 @@ Resources:
       Path: "/"
       Roles: 
         - !Ref SeedInstanceRole
+
+  LaunchTemplate:
+    Type: 'AWS::EC2::LaunchTemplate'
+    Properties:
+      LaunchTemplateData:
+        MetadataOptions:
+          HttpTokens: optional
+        
+
 # Seed Instance
   SeedEC2Instance:
     Type: AWS::EC2::Instance
     Properties:
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: 1
       InstanceType: !Ref 'InstanceType'
       SecurityGroupIds: [!GetAtt SeedSecurityGroup.GroupId]
       KeyName: !Ref MASOCPKeyPair
@@ -180,7 +193,7 @@ Resources:
           tar -zxf /root/install-dir/openshift-install-linux.tar.gz -C /root/install-dir/
 
           # Download the rosa CLI
-          wget https://mirror.openshift.com/pub/openshift-v4/clients/rosa/latest/rosa-linux.tar.gz -O ~/install-dir/rosa-linux.tar.gz
+          wget https://mirror.openshift.com/pub/openshift-v4/clients/rosa/1.2.36/rosa-linux.tar.gz -O ~/install-dir/rosa-linux.tar.gz
           mkdir -p ~/install-dir/rosa-install
           tar xvf ~/install-dir/rosa-linux.tar.gz -C ~/install-dir/rosa-install
           sudo mv ~/install-dir/rosa-install/rosa /usr/local/bin/
@@ -239,6 +252,13 @@ Resources:
           export FUJ_MAS_DOMAIN=${MaximoDomainName}
           export FUJ_CERT_SUBJECT="${MaximoCertSubject}"
           export FUJ_MASINSTANCE_ID=${MasInstanceID}
+          #Export settings for JMS Queue
+          export MAS_APP_SETTINGS_SERVER_BUNDLES_SIZE="jms"
+          export MAS_APP_SETTINGS_JMS_QUEUE_PVC_STORAGE_CLASS="efs${OCPClusterName}"
+          export MAS_APP_SETTINGS_JMS_QUEUE_PVC_ACCESSMODE="ReadWriteMany"
+          export MAS_APP_SETTINGS_DOCLINKS_PVC_STORAGE_CLASS="efs${OCPClusterName}"
+          export MAS_APP_SETTINGS_BIM_PVC_STORAGE_CLASS="efs${OCPClusterName}"
+
           git clone https://github.com/fujitsu-eam/maximo-bootstrap.git
           cd maximo-bootstrap
           ansible-playbook maximo-bootstrap.yml
