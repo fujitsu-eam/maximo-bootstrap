@@ -19,7 +19,7 @@
 
     - name: Pause for 5 minutes for cluster to stabilise
       ansible.builtin.pause:
-        minutes: 15
+        minutes: 10
 
     - name: Create ROSA cluster-admin user
       ansible.builtin.shell: /usr/local/bin/rosa create admin --cluster={{ rosa_cluster_name }} |grep 'oc login' | awk '{print $7}'
