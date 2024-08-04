@@ -29,7 +29,7 @@ export AWS_DEFAULT_REGION=ap-southeast-2
 export IPI_REGION=$AWS_DEFAULT_REGION
 
 ## Fetch the VPC where the installation must progress
-#Paul
+#Paul This describe VPCS call was not fetching the VPC for some reason
 #export VPCID=`aws ec2 describe-vpcs --region ${IPI_REGION} --query 'Vpcs[?(Tags[?contains(Key,'\'${CLUSTER_NAME}\'' )])].VpcId' --output text`
 export VPCID=vpc-04fbe5a678dc3f93b
 echo `date "+%Y/%m/%d %H:%M:%S"` "VPC ID = " $VPCID
@@ -52,25 +52,22 @@ while [[ `aws efs describe-file-systems --region ${IPI_REGION}  --creation-token
 EFSID=`aws efs describe-file-systems --region ${IPI_REGION}  --creation-token mas_devops.${CLUSTER_NAME} --query 'FileSystems[0].FileSystemId' --output text`
 echo `date "+%Y/%m/%d %H:%M:%S"` "EFS ID created = " $EFSID
 
+#Paul - This call was not fetching any subnet ids. According to Dan it is because the name route.nat.gateway is not valid
 #PRIVATE_SUBNET_IDS=`aws ec2 describe-route-tables --region ${IPI_REGION} --filter #Name=vpc-id,Values=${VPCID} Name=route.nat-gateway-id,Values='*nat*' --query #"RouteTables[].Associations[].SubnetId" --output text`
-
-
 #echo `date "+%Y/%m/%d %H:%M:%S"` "Private Subnet IDs = " $PRIVATE_SUBNET_IDS
 
 echo `date "+%Y/%m/%d %H:%M:%S"` "Creating Mount Targets"
 #for PRIVATE_SUBNET_ID in ${PRIVATE_SUBNET_IDS}; do aws efs create-mount-target --file-system-id #${EFSID} --subnet-id ${PRIVATE_SUBNET_ID} --security-groups ${WORKERSGID} --region #${IPI_REGION};# done
 
+#Paul - Create the mount targets manually
 aws efs create-mount-target --file-system-id ${EFSID} --subnet-id subnet-056188fda1c8a81ee --security-groups ${WORKERSGID} --region ${IPI_REGION}
 aws efs create-mount-target --file-system-id ${EFSID} --subnet-id subnet-02224a6ccd14440e2 --security-groups ${WORKERSGID} --region ${IPI_REGION}
 aws efs create-mount-target --file-system-id ${EFSID} --subnet-id subnet-0f6ec05f163985e36 --security-groups ${WORKERSGID} --region ${IPI_REGION}
 
-
 echo `date "+%Y/%m/%d %H:%M:%S"` "Creating Access Point"
 aws efs create-access-point --file-system-id ${EFSID} --client-token mas_devops.${CLUSTER_NAME} --posix-user Uid=10022,Gid=20000 --root-directory Path='/ocp,CreationInfo={OwnerUid=10011,OwnerGid=10000,Permissions=0755}' --region ${IPI_REGION}
 
-
 ## Configure a new Storage Class in OCP cluster with the create EFS
-
 if [[ -f /root/install-dir/auth/kubeconfig ]]; then 
     echo `date "+%Y/%m/%d %H:%M:%S"` "Creating Storage class in OCP cluster"
     oc apply -f /root/.ansible/collections/ansible_collections/ibm/mas_devops/roles/ocp_efs/templates/operator-group.yml.j2 --kubeconfig /root/install-dir/auth/kubeconfig
