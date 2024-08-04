@@ -55,7 +55,7 @@
       ansible.builtin.shell: aws secretsmanager create-secret --name {{ rosa_cluster_name }}-ocp-creds --description "ROSA Login Details" --secret-string '{"user":"cluster-admin","password":"{{  _r_rosa_admin_create_result.stdout }}"}'
 
     - name: Create an EFS
-      ansible.builtin.shell: /root/ibm-mas-on-aws/scripts/create_efs_rwx_sc.sh {{ rosa_cluster_name }}
+      ansible.builtin.shell: ./scripts/create_efs_rwx_sc2.sh {{ rosa_cluster_name }}
 
     - name: Create Custom Domain
       ansible.builtin.shell: ./scripts/customdomain.sh {{ mas_domain_name }} {{ cert_subject }}
