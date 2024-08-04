@@ -85,5 +85,4 @@
     - name: Label the MAS worskpace for Custom Ingress
       ansible.builtin.shell: oc label ns mas-{{ mas_instance_name }}-core ingress=maximo
     
-    - name: Label the Manage worskpace for Custom Ingress
-      ansible.builtin.shell: oc label ns mas-{{ mas_instance_name }}-manage ingress=maximo
+  
